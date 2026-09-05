@@ -102,3 +102,5 @@ at a safe boundary (never inside a UTF-8 rune).
 - `unfold.go` — streaming RFC 5545 line unfolding
 - `format.go` — normalization and re-folding
 - `cmd/icalfmt` — CLI wrapper
+
+Run the tests with `go test ./...`.
