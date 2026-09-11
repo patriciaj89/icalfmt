@@ -90,10 +90,27 @@ Property and parameter names come out upper-cased and every line ends
 in CRLF; any line whose content would exceed 75 octets gets re-folded
 at a safe boundary (never inside a UTF-8 rune).
 
+## Validation
+
+`Validate` streams a calendar and checks structural correctness: every
+`BEGIN` has a matching `END` in the right order, and each component
+has the properties RFC 5545 unconditionally requires (`VCALENDAR`
+needs `VERSION` and `PRODID`, `VEVENT` needs `UID` and `DTSTAMP`, and
+so on). It reports every problem it finds in one pass, joined into a
+single error, rather than stopping at the first:
+
+```go
+if err := icalfmt.Validate(f); err != nil {
+	log.Fatal(err)
+}
+```
+
+It does not check conditional rules (a `VEVENT` needing `DTSTART`
+unless the calendar has a `METHOD`, `VALARM`'s required set varying by
+`ACTION`) or value formats — see below.
+
 ## What it does not do (yet)
 
-- No validation of the calendar structure (unbalanced BEGIN/END,
-  missing required properties, and so on) — see the roadmap.
 - Value contents (dates, RRULEs, text escaping) are passed through
   as-is; only line structure and name casing are normalized.
 
@@ -101,6 +118,7 @@ at a safe boundary (never inside a UTF-8 rune).
 
 - `unfold.go` — streaming RFC 5545 line unfolding
 - `format.go` — normalization and re-folding
+- `validate.go` — BEGIN/END nesting and required-property checks
 - `cmd/icalfmt` — CLI wrapper
 
 Run the tests with `go test ./...`.
