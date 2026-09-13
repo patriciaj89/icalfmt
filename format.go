@@ -51,7 +51,11 @@ func (f *Formatter) Format(r io.Reader) error {
 			}
 			continue
 		}
-		normalized := strings.ToUpper(name) + upperParamNames(params) + ":" + value
+		nameUpper := strings.ToUpper(name)
+		if textValueProperties[nameUpper] {
+			value = normalizeText(value)
+		}
+		normalized := nameUpper + upperParamNames(params) + ":" + value
 		if err := writeFolded(f.w, normalized); err != nil {
 			return err
 		}
@@ -140,6 +144,61 @@ func upperParamNames(params string) string {
 		default:
 			out.WriteByte(c)
 		}
+	}
+	return out.String()
+}
+
+// textValueProperties lists the standard RFC 5545 properties whose
+// value type is TEXT (or a comma-separated list of TEXT), where the
+// backslash-escaping rules in section 3.3.11 apply. Properties not
+// listed here (including X- properties, whose value type is only
+// known via an optional VALUE parameter) are left untouched.
+var textValueProperties = map[string]bool{
+	"ACTION":      true,
+	"CATEGORIES":  true,
+	"CLASS":       true,
+	"COMMENT":     true,
+	"CONTACT":     true,
+	"DESCRIPTION": true,
+	"LOCATION":    true,
+	"METHOD":      true,
+	"PRODID":      true,
+	"RELATED-TO":  true,
+	"RESOURCES":   true,
+	"STATUS":      true,
+	"SUMMARY":     true,
+	"TRANSP":      true,
+	"TZID":        true,
+	"TZNAME":      true,
+	"UID":         true,
+}
+
+// normalizeText canonicalizes the escaped-newline form of a TEXT value.
+// RFC 5545 section 3.3.11 allows a literal newline inside TEXT to be
+// escaped as either "\N" or "\n"; exports disagree on which they use,
+// which defeats byte-for-byte comparison between otherwise identical
+// calendars. This rewrites "\N" to "\n" wherever it appears as an
+// escape (i.e. preceded by an even number of backslashes) and leaves
+// every other character, including other escape sequences, untouched.
+func normalizeText(value string) string {
+	var out strings.Builder
+	out.Grow(len(value))
+	escaped := false
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if escaped {
+			if c == 'N' {
+				out.WriteByte('n')
+			} else {
+				out.WriteByte(c)
+			}
+			escaped = false
+			continue
+		}
+		if c == '\\' {
+			escaped = true
+		}
+		out.WriteByte(c)
 	}
 	return out.String()
 }

@@ -156,6 +156,42 @@ func TestFormatNormalizesCasingFoldingAndLineEndings(t *testing.T) {
 	}
 }
 
+func TestNormalizeText(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", ""},
+		{"no escapes here", "no escapes here"},
+		{`line one\Nline two`, `line one\nline two`},
+		{`already\nlowercase`, `already\nlowercase`},
+		{`a\\Nb`, `a\\Nb`}, // escaped backslash followed by a literal N, not an escape
+		{`\N\N`, `\n\n`},
+		{`comma\, semi\; back\\ newline\N end`, `comma\, semi\; back\\ newline\n end`},
+	}
+	for _, c := range cases {
+		if got := normalizeText(c.in); got != c.want {
+			t.Errorf("normalizeText(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFormatNormalizesTextEscapesOnKnownProperties(t *testing.T) {
+	input := "BEGIN:VEVENT\r\n" +
+		`DESCRIPTION:Line one\NLine two` + "\r\n" +
+		`X-CUSTOM:Line one\NLine two` + "\r\n" +
+		"END:VEVENT\r\n"
+	want := "BEGIN:VEVENT\r\n" +
+		`DESCRIPTION:Line one\nLine two` + "\r\n" +
+		`X-CUSTOM:Line one\NLine two` + "\r\n" +
+		"END:VEVENT\r\n"
+
+	var buf bytes.Buffer
+	if err := NewFormatter(&buf).Format(strings.NewReader(input)); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != want {
+		t.Errorf("Format() output:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 func TestFormatPassesThroughNonContentLines(t *testing.T) {
 	input := "not a content line at all\r\nUID:1\r\n"
 	want := "not a content line at all\r\nUID:1\r\n"

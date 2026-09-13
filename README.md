@@ -111,8 +111,11 @@ unless the calendar has a `METHOD`, `VALARM`'s required set varying by
 
 ## What it does not do (yet)
 
-- Value contents (dates, RRULEs, text escaping) are passed through
-  as-is; only line structure and name casing are normalized.
+- Value contents are otherwise passed through as-is: dates, RRULEs,
+  and the value types of X- properties are not normalized. The one
+  exception is TEXT-valued standard properties (`SUMMARY`,
+  `DESCRIPTION`, `UID`, and the like), where the escaped-newline form
+  is canonicalized to `\n` (RFC 5545 allows both `\N` and `\n`).
 
 ## Layout
 
