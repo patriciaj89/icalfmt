@@ -111,11 +111,17 @@ unless the calendar has a `METHOD`, `VALARM`'s required set varying by
 
 ## What it does not do (yet)
 
-- Value contents are otherwise passed through as-is: dates, RRULEs,
-  and the value types of X- properties are not normalized. The one
-  exception is TEXT-valued standard properties (`SUMMARY`,
-  `DESCRIPTION`, `UID`, and the like), where the escaped-newline form
-  is canonicalized to `\n` (RFC 5545 allows both `\N` and `\n`).
+- Value contents are otherwise passed through as-is: RRULEs and the
+  value types of X- properties are not normalized. Two exceptions:
+  - TEXT-valued standard properties (`SUMMARY`, `DESCRIPTION`, `UID`,
+    and the like) have their escaped-newline form canonicalized to
+    `\n` (RFC 5545 allows both `\N` and `\n`).
+  - DATE-TIME-valued standard properties (`DTSTART`, `DTEND`,
+    `DTSTAMP`, `EXDATE`, and the like) have the `T` date/time
+    separator and trailing `Z` UTC designator upper-cased, since
+    those are case-sensitive per the grammar but some exports get
+    them wrong. A bare `DATE` value (no time component) is left
+    alone, since it has nothing to normalize.
 
 ## Layout
 

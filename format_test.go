@@ -192,6 +192,57 @@ func TestFormatNormalizesTextEscapesOnKnownProperties(t *testing.T) {
 	}
 }
 
+func TestNormalizeDateTime(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", ""},
+		{"20260115", "20260115"}, // bare DATE: nothing to normalize
+		{"20260115T090000", "20260115T090000"},
+		{"20260115t090000", "20260115T090000"},
+		{"20260115T090000Z", "20260115T090000Z"},
+		{"20260115t090000z", "20260115T090000Z"},
+		{"20260115T090000z", "20260115T090000Z"},
+		{ // EXDATE/RDATE comma list
+			"20260115t090000z,20260116T100000",
+			"20260115T090000Z,20260116T100000",
+		},
+		{ // RDATE PERIOD value
+			"20260115t090000z/20260116t100000z",
+			"20260115T090000Z/20260116T100000Z",
+		},
+		{"-PT15M", "-PT15M"},                     // TRIGGER duration: no digit run to match
+		{"2026011", "2026011"},                   // too short to be a date
+		{"202601150t090000", "202601150t090000"}, // 9-digit run, not an 8-digit date
+	}
+	for _, c := range cases {
+		if got := normalizeDateTime(c.in); got != c.want {
+			t.Errorf("normalizeDateTime(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFormatNormalizesDateTimeOnKnownProperties(t *testing.T) {
+	input := "BEGIN:VEVENT\r\n" +
+		"DTSTART:20260115t090000z\r\n" +
+		"DTEND;VALUE=DATE:20260116\r\n" +
+		"EXDATE:20260115t090000z,20260122t090000z\r\n" +
+		"X-CUSTOM-DATE:20260115t090000z\r\n" +
+		"END:VEVENT\r\n"
+	want := "BEGIN:VEVENT\r\n" +
+		"DTSTART:20260115T090000Z\r\n" +
+		"DTEND;VALUE=DATE:20260116\r\n" +
+		"EXDATE:20260115T090000Z,20260122T090000Z\r\n" +
+		"X-CUSTOM-DATE:20260115t090000z\r\n" +
+		"END:VEVENT\r\n"
+
+	var buf bytes.Buffer
+	if err := NewFormatter(&buf).Format(strings.NewReader(input)); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != want {
+		t.Errorf("Format() output:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 func TestFormatPassesThroughNonContentLines(t *testing.T) {
 	input := "not a content line at all\r\nUID:1\r\n"
 	want := "not a content line at all\r\nUID:1\r\n"

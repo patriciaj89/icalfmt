@@ -52,8 +52,11 @@ func (f *Formatter) Format(r io.Reader) error {
 			continue
 		}
 		nameUpper := strings.ToUpper(name)
-		if textValueProperties[nameUpper] {
+		switch {
+		case textValueProperties[nameUpper]:
 			value = normalizeText(value)
+		case dateTimeValueProperties[nameUpper]:
+			value = normalizeDateTime(value)
 		}
 		normalized := nameUpper + upperParamNames(params) + ":" + value
 		if err := writeFolded(f.w, normalized); err != nil {
@@ -201,6 +204,84 @@ func normalizeText(value string) string {
 		out.WriteByte(c)
 	}
 	return out.String()
+}
+
+// dateTimeValueProperties lists the standard RFC 5545 properties whose
+// value type is DATE-TIME by default (section 3.8.2, 3.8.4, 3.8.5, 3.8.6,
+// 3.8.7). A DTSTART, DTEND, DUE, RECURRENCE-ID, EXDATE, or RDATE can be
+// switched to DATE via a VALUE parameter, and TRIGGER can be switched to
+// DURATION, but normalizeDateTime only rewrites substrings that already
+// look like a DATE-TIME, so running it on a DATE or DURATION value is a
+// no-op rather than a misfire.
+var dateTimeValueProperties = map[string]bool{
+	"CREATED":       true,
+	"DTEND":         true,
+	"DTSTAMP":       true,
+	"DTSTART":       true,
+	"DUE":           true,
+	"EXDATE":        true,
+	"LAST-MODIFIED": true,
+	"RDATE":         true,
+	"RECURRENCE-ID": true,
+	"TRIGGER":       true,
+}
+
+// normalizeDateTime upper-cases the "T" date/time separator and trailing
+// "Z" UTC designator in every DATE-TIME-shaped substring of value:
+// 8 digits, "T" or "t", 6 digits, and an optional "Z" or "z". This covers
+// EXDATE/RDATE comma-lists and RDATE PERIOD values too, since it scans
+// for the shape rather than requiring the whole value to match it.
+// Anything that isn't shaped like a DATE-TIME (a bare DATE, a DURATION
+// on TRIGGER) is left untouched.
+func normalizeDateTime(value string) string {
+	b := []byte(value)
+	n := len(b)
+	for i := 0; i+8 <= n; {
+		if !isDigitRun(b[i : i+8]) {
+			i++
+			continue
+		}
+		if i > 0 && isDigit(b[i-1]) {
+			// Part of a longer digit run, not an 8-digit date.
+			i++
+			continue
+		}
+		t := i + 8
+		if t >= n || (b[t] != 't' && b[t] != 'T') {
+			i = t
+			continue
+		}
+		timeEnd := t + 7 // one past the 6 time digits
+		if timeEnd > n || !isDigitRun(b[t+1:timeEnd]) {
+			i = t + 1
+			continue
+		}
+		if timeEnd < n && isDigit(b[timeEnd]) {
+			// More than 6 digits after T: not a valid time.
+			i = timeEnd
+			continue
+		}
+		b[t] = 'T'
+		if timeEnd < n && (b[timeEnd] == 'z' || b[timeEnd] == 'Z') {
+			b[timeEnd] = 'Z'
+			timeEnd++
+		}
+		i = timeEnd
+	}
+	return string(b)
+}
+
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func isDigitRun(b []byte) bool {
+	for _, c := range b {
+		if !isDigit(c) {
+			return false
+		}
+	}
+	return true
 }
 
 func asciiUpper(c byte) byte {
