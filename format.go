@@ -6,21 +6,27 @@ import (
 	"strings"
 )
 
-// maxOctets is the RFC 5545 recommended maximum content line length,
-// not counting the CRLF terminator.
-const maxOctets = 75
+// DefaultLineLength is the RFC 5545 recommended maximum content line
+// length, not counting the CRLF terminator.
+const DefaultLineLength = 75
 
 // Formatter reads an iCalendar stream and writes it back out in a
 // normalized form: consistent CRLF line endings, upper-cased property
-// and parameter names, and lines re-folded to the RFC 5545 length
-// limit. Property and parameter values are passed through untouched.
+// and parameter names, and lines re-folded to LineLength. Property and
+// parameter values are passed through untouched.
 type Formatter struct {
+	// LineLength is the maximum octet count of a folded line,
+	// excluding the CRLF terminator. NewFormatter sets it to
+	// DefaultLineLength; callers may change it before calling
+	// Format.
+	LineLength int
+
 	w *bufio.Writer
 }
 
 // NewFormatter wraps w for normalized output.
 func NewFormatter(w io.Writer) *Formatter {
-	return &Formatter{w: bufio.NewWriter(w)}
+	return &Formatter{w: bufio.NewWriter(w), LineLength: DefaultLineLength}
 }
 
 // Format streams r through the formatter, writing normalized content
@@ -28,6 +34,10 @@ func NewFormatter(w io.Writer) *Formatter {
 // It processes one logical line at a time, so the size of r does not
 // bound the memory this uses.
 func (f *Formatter) Format(r io.Reader) error {
+	limit := f.LineLength
+	if limit <= 0 {
+		limit = DefaultLineLength
+	}
 	u := NewUnfolder(r)
 	for {
 		line, ok := u.Next()
@@ -46,7 +56,7 @@ func (f *Formatter) Format(r io.Reader) error {
 			// No unquoted colon at all: not a valid content
 			// line. Pass it through rather than silently
 			// dropping data we don't understand.
-			if err := writeFolded(f.w, line); err != nil {
+			if err := writeFolded(f.w, line, limit); err != nil {
 				return err
 			}
 			continue
@@ -59,7 +69,7 @@ func (f *Formatter) Format(r io.Reader) error {
 			value = normalizeDateTime(value)
 		}
 		normalized := nameUpper + upperParamNames(params) + ":" + value
-		if err := writeFolded(f.w, normalized); err != nil {
+		if err := writeFolded(f.w, normalized, limit); err != nil {
 			return err
 		}
 	}
@@ -292,18 +302,18 @@ func asciiUpper(c byte) byte {
 }
 
 // writeFolded writes line to w as one or more RFC 5545 content lines:
-// CRLF-terminated, folded so no line exceeds maxOctets octets, with
+// CRLF-terminated, folded so no line exceeds limit octets, with
 // continuation lines prefixed by a single space. Folding never splits
 // a UTF-8 rune.
-func writeFolded(w io.Writer, line string) error {
+func writeFolded(w io.Writer, line string, limit int) error {
 	b := []byte(line)
 	first := true
 	for {
-		limit := maxOctets
+		lim := limit
 		if !first {
-			limit-- // the continuation's leading space counts
+			lim-- // the continuation's leading space counts
 		}
-		if len(b) <= limit {
+		if len(b) <= lim {
 			if !first {
 				if _, err := w.Write([]byte{' '}); err != nil {
 					return err
@@ -316,7 +326,7 @@ func writeFolded(w io.Writer, line string) error {
 			return err
 		}
 
-		n := limit
+		n := lim
 		for n > 0 && isUTF8Continuation(b[n]) {
 			n--
 		}

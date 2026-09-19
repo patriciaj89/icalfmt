@@ -53,7 +53,7 @@ func TestUpperParamNames(t *testing.T) {
 
 func TestWriteFoldedUnderLimit(t *testing.T) {
 	var buf bytes.Buffer
-	if err := writeFolded(&buf, "SUMMARY:short"); err != nil {
+	if err := writeFolded(&buf, "SUMMARY:short", DefaultLineLength); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), "SUMMARY:short\r\n"; got != want {
@@ -62,9 +62,9 @@ func TestWriteFoldedUnderLimit(t *testing.T) {
 }
 
 func TestWriteFoldedExactlyAtLimit(t *testing.T) {
-	line := strings.Repeat("a", maxOctets)
+	line := strings.Repeat("a", DefaultLineLength)
 	var buf bytes.Buffer
-	if err := writeFolded(&buf, line); err != nil {
+	if err := writeFolded(&buf, line, DefaultLineLength); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := buf.String(), line+"\r\n"; got != want {
@@ -73,12 +73,24 @@ func TestWriteFoldedExactlyAtLimit(t *testing.T) {
 }
 
 func TestWriteFoldedOverLimit(t *testing.T) {
-	line := strings.Repeat("a", maxOctets+1)
+	line := strings.Repeat("a", DefaultLineLength+1)
 	var buf bytes.Buffer
-	if err := writeFolded(&buf, line); err != nil {
+	if err := writeFolded(&buf, line, DefaultLineLength); err != nil {
 		t.Fatal(err)
 	}
-	want := strings.Repeat("a", maxOctets) + "\r\n" + " a\r\n"
+	want := strings.Repeat("a", DefaultLineLength) + "\r\n" + " a\r\n"
+	if got := buf.String(); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestWriteFoldedCustomLimit(t *testing.T) {
+	line := "SUMMARY:abcdefghij"
+	var buf bytes.Buffer
+	if err := writeFolded(&buf, line, 10); err != nil {
+		t.Fatal(err)
+	}
+	want := "SUMMARY:ab\r\n cdefghij\r\n"
 	if got := buf.String(); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -90,7 +102,7 @@ func TestWriteFoldedNeverSplitsARune(t *testing.T) {
 	// the rune's two bytes together on the continuation line.
 	line := strings.Repeat("a", 74) + "é" + strings.Repeat("b", 10)
 	var buf bytes.Buffer
-	if err := writeFolded(&buf, line); err != nil {
+	if err := writeFolded(&buf, line, DefaultLineLength); err != nil {
 		t.Fatal(err)
 	}
 	got := buf.String()

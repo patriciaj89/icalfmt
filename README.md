@@ -32,7 +32,19 @@ go run ./cmd/icalfmt messy.ics > clean.ics
 
 # or from a pipe
 cat messy.ics | go run ./cmd/icalfmt > clean.ics
+
+# normalize in place instead of writing to stdout
+go run ./cmd/icalfmt -w messy.ics
+
+# fold at a different width than the RFC 5545 default of 75 octets
+go run ./cmd/icalfmt -l 998 messy.ics > clean.ics
 ```
+
+`-w` requires a file argument (it has nothing to rewrite when reading
+from a pipe) and rewrites the file atomically: the normalized output
+goes to a temp file in the same directory first, which is then renamed
+over the original, so a failure partway through never leaves a
+truncated file behind.
 
 As a library:
 
@@ -87,7 +99,8 @@ END:VCALENDAR
 ```
 
 Property and parameter names come out upper-cased and every line ends
-in CRLF; any line whose content would exceed 75 octets gets re-folded
+in CRLF; any line whose content would exceed the fold width (75 octets
+by default, `Formatter.LineLength` or `-l` to change it) gets re-folded
 at a safe boundary (never inside a UTF-8 rune).
 
 ## Validation
